@@ -2,7 +2,7 @@
 
 Model Context Protocol server that exposes Linux [SocketCAN](https://www.kernel.org/doc/html/latest/networking/can.html) interfaces to AI agents — Claude Code, Claude Desktop, the MCP Inspector, anything that speaks MCP.
 
-Built on top of [`mcanbus`](../mcanbus/) (high-performance SocketCAN bindings) by the makers of [CANsole](https://cansole.app), the CAN debugger for engineers.
+Built on top of [`mcanbus`](../mcanbus/) (high-performance SocketCAN bindings) by the makers of CANsole, a forthcoming desktop CAN debugger for working engineers.
 
 ## Why?
 
