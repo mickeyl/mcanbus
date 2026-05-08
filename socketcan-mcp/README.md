@@ -157,10 +157,28 @@ positive-response header (`0x5A` `0x90`), the rest is the VIN.
 
 ## Roadmap
 
-- Long-running capture sessions (`capture_start`/`capture_read`/`capture_stop`) using the [`mcanbus::reader`](../mcanbus/src/reader.rs) fan-out.
-- CAN-FD ISO-TP (ISO 15765-2:2024 escape sequence).
-- ECU-side BlockSize > 0 in `isotp_request` (currently errors with `Unsupported`).
-- DBC decoding (frames returned with symbolic signal names alongside raw bytes).
+### Transport & protocol
+
+- Long-running capture sessions (`capture_start`/`capture_read`/`capture_stop`) backed by the [`mcanbus::reader`](../mcanbus/src/reader.rs) fan-out, so the agent can correlate request/response timing without polling.
+- CAN-FD ISO-TP (ISO 15765-2:2024 escape sequence) — extended `isotp_request` for FD payloads beyond 4095 bytes.
+- ECU-side `BlockSize > 0` in `isotp_request` (currently errors with `Unsupported`).
+- DBC decoding so frames come back as named signals alongside raw bytes.
+
+### Diagnostic-domain tools
+
+These are convenience wrappers over `isotp_request` and `capture` that turn common workflows into single typed calls:
+
+- **`uds_session`** — replay a UDS choreography (DSC → SecAccess → RoutineControl → RequestDownload → TransferData → TransferExit → ECUReset) and validate every step against the ISO 14229 state machine. Reports P2/P2* timing, NRC sequences, and `0x78` (ResponsePending) escalations. Aimed at flasher-app validation: catches wrong P2* timeouts, padding mismatches, and BlockSize handling bugs before they cost a 30-minute flash.
+- **`obd_pid_query`** — OBD-II Mode 0x01 PID reads with structured decoding (engine RPM, coolant temperature, etc.). Customer reports of the form "PID 0x05 looks weird" become reproducible in one call.
+- **`dtc_read`** — read all DTCs (`19 02 FF`), parse the 3-byte ID + 1-byte status structure, decode where a database is available.
+- **`dtc_diff`** — `dtc_read` snapshot before and after a flash or routine, return the delta (cleared / new / status-changed). Catches flash regressions that a screenshot-and-compare workflow misses.
+- **`ecu_discover`** — broadcast DSC on the functional address (`0x7DF` / `0x18DB33F1`), capture all responders, return a map of `{tester_address → first_response_bytes}`. Bus-topology exploration in one call.
+- **`uds_diff`** — run the same UDS payload against two interfaces (e.g. `can0` real ECU vs. `can1` mock / [ECUmulator](https://github.com/Automotive-Swift/Swift-CANyonero)) and report response-by-response divergences. Useful for validating mocks against silicon.
+- **`isotp_fuzz_lite`** — bounded-set malformed ISO-TP requests (oversized SF, wrong CF sequence, illegal sub-function bytes, out-of-range DIDs) to verify the ECU answers with proper NRCs (`0x12` / `0x13` / `0x22` / `0x33`) instead of timing out. Robustness regression test.
+
+### Observability
+
+- Pre-flight summary tool (`bus_health`) — combine `iface_state`, an N-second `capture`, and an error-frame count into a single "is this bus ready for a 30-minute flash" verdict.
 
 ## License
 
