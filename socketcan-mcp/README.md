@@ -31,7 +31,8 @@ The response is a structured JSON list of frames with hardware timestamps — no
 | `iface_state`         | Detailed status (up/down, controller state, bitrate) for one interface.                           | —          |
 | `capture`             | Listen for up to `timeout_ms` ms and return up to `max_frames` matching frames.                   | allowlist  |
 | `send_frame`          | Transmit a single frame.                                                                          | allowlist + writable |
-| `send_and_capture`    | Transmit and immediately capture replies in the same call.                                        | allowlist + writable |
+| `send_and_capture`    | Transmit and immediately capture replies in the same call (raw frames, no segmentation).         | allowlist + writable |
+| `isotp_request`       | ISO 15765-2 request/response with automatic SF/FF/CF segmentation and Flow Control. UDS/KWP/OBD. | allowlist + writable |
 
 All write tools refuse when `SOCKETCAN_MCP_READONLY=1`.
 
@@ -115,10 +116,50 @@ then set `SOCKETCAN_MCP_INTERFACES` in the inspector's environment panel.
 - **Readonly mode**: `SOCKETCAN_MCP_READONLY=1` reduces the surface area to capture/inspect tools. Pair with the allowlist for a tight sandbox.
 - **No interface configuration**: this server cannot bring interfaces up/down, change bitrate, or alter controller state. That's a deliberate scope choice — netlink admin operations are too consequential to expose by default. See the `mcanbus::iface` crate if you need them in custom tooling.
 
+## Worked example: read a VIN
+
+The Scania S8 truck (and many other commercial vehicles) speak KWP2000 over CAN
+with ISO-15765 extended addressing. A VIN read is `service 0x1A` + `LID 0x90`,
+which the ECU answers with 19 bytes (positive-response header + 17-character
+VIN). That fits in a First Frame + 2 Consecutive Frames; without ISO-TP the
+agent would have to orchestrate the Flow Control by hand.
+
+With `isotp_request` it's one tool call:
+
+```jsonc
+{
+  "name": "isotp_request",
+  "arguments": {
+    "iface": "can0",
+    "tx_id": "18DA00F9",
+    "rx_id": "18DAF900",
+    "extended": true,
+    "payload": "1A90"
+  }
+}
+```
+
+Response:
+
+```jsonc
+{
+  "duration_ms": 1,
+  "response": {
+    "len": 19,
+    "hex":   "5A905953325236583430303035343132373335",
+    "ascii": "Z.YS2R6X40005412735"
+  }
+}
+```
+
+The ASCII column shows the bytes verbatim — the leading `Z.` is the KWP
+positive-response header (`0x5A` `0x90`), the rest is the VIN.
+
 ## Roadmap
 
-- ISO-TP send/recv as a primitive (`isotp_request`).
 - Long-running capture sessions (`capture_start`/`capture_read`/`capture_stop`) using the [`mcanbus::reader`](../mcanbus/src/reader.rs) fan-out.
+- CAN-FD ISO-TP (ISO 15765-2:2024 escape sequence).
+- ECU-side BlockSize > 0 in `isotp_request` (currently errors with `Unsupported`).
 - DBC decoding (frames returned with symbolic signal names alongside raw bytes).
 
 ## License

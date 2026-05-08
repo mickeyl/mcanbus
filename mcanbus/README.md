@@ -6,6 +6,7 @@ High-performance, low-overhead [SocketCAN](https://www.kernel.org/doc/html/lates
 - **CAN 2.0 and CAN-FD** in one frame type, with hardware timestamps when the driver supports them.
 - **Batched syscalls** — `recvmmsg` / `sendmmsg` for high-throughput pipelines.
 - **Netlink helpers** — bring interfaces up/down, query `CAN_STATE_*`, recover from BUS-OFF without `ip link` shell-outs.
+- **ISO 15765-2 (ISO-TP)** — synchronous request/response with automatic SF/FF/CF segmentation and Flow Control in both directions. Used for UDS, KWP2000, OBD-II reads larger than 7 bytes.
 - **Optional fan-out reader** — one RX thread, many lock-free subscribers via `crossbeam-channel`. Zero-loss when subscribers keep up; per-subscriber drop counters when they don't.
 
 ## Status

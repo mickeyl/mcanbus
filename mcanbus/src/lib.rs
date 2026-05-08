@@ -22,6 +22,7 @@
 //! - [`frame`] — frame types, IDs, wire-format conversion.
 //! - [`socket`] — `CAN_RAW` socket: open, send, recv, batched I/O.
 //! - [`iface`] — interface enumeration and netlink control (up/down, state, bitrate).
+//! - [`isotp`] — ISO 15765-2 segmented transport (request/response).
 //! - [`consts`] — re-exported `linux/can.h` constants for power users.
 //! - [`reader`] *(feature `reader`)* — multi-consumer fan-out reader.
 
@@ -32,6 +33,7 @@
 pub mod consts;
 pub mod frame;
 pub mod iface;
+pub mod isotp;
 pub mod socket;
 
 #[cfg(feature = "reader")]

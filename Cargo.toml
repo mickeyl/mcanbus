@@ -3,7 +3,7 @@ resolver = "2"
 members = ["mcanbus", "socketcan-mcp"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.94"
 authors = ["Dr. Michael 'Mickey' Lauer <mickey@vanille-media.de>"]
@@ -11,7 +11,7 @@ license = "MIT"
 repository = "https://github.com/mickeyl/mcanbus"
 
 [workspace.dependencies]
-mcanbus = { path = "mcanbus", version = "0.1.0" }
+mcanbus = { path = "mcanbus", version = "0.2.0" }
 libc = "0.2"
 
 [profile.release]

@@ -27,6 +27,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use mcanbus::iface::{list_can_interfaces, Interface};
+use mcanbus::isotp;
 use mcanbus::{CanFilter, CanId, FdFlags, Frame, OpenOpts, Socket};
 
 // ── Config ────────────────────────────────────────────────────────────────
@@ -171,6 +172,41 @@ struct FilterSpec {
 }
 
 #[derive(Debug, Deserialize, Serialize, JsonSchema)]
+struct IsoTpRequestArgs {
+    /// Interface to use for both transmit and receive.
+    iface: String,
+    /// Tester-side ID we transmit on. Hex string (with or without `0x`).
+    tx_id: String,
+    /// ECU-side ID we receive on. Hex string.
+    rx_id: String,
+    /// Whether `tx_id` and `rx_id` are 29-bit extended identifiers.
+    #[serde(default)]
+    extended: bool,
+    /// Request payload as a hex string. The library wraps it in ISO-TP
+    /// (Single Frame for ≤ 7 bytes, otherwise First Frame + Consecutive
+    /// Frames with Flow Control).
+    payload: String,
+    /// Padding byte for unused bytes within an 8-byte frame, hex.
+    /// Default `"CC"` (Scania-typical).
+    #[serde(default = "default_padding")]
+    padding: String,
+    /// Total timeout for the entire request/response cycle, milliseconds.
+    #[serde(default = "default_timeout_ms")]
+    timeout_ms: u64,
+    /// Block Size we advertise in our outgoing Flow Control. Default `0`.
+    #[serde(default)]
+    block_size: u8,
+    /// SeparationTime (ms) we ask the ECU to honour between consecutive
+    /// frames it sends to us. Default `0`.
+    #[serde(default)]
+    st_min_ms: u8,
+}
+
+fn default_padding() -> String {
+    "CC".to_string()
+}
+
+#[derive(Debug, Deserialize, Serialize, JsonSchema)]
 struct FilterEntry {
     /// ID pattern as hex string.
     id: String,
@@ -241,6 +277,12 @@ fn parse_hex_id(s: &str, extended: bool) -> Result<CanId, McpError> {
     } else {
         CanId::standard(raw as u16)
     })
+}
+
+fn parse_single_hex_byte(s: &str) -> Result<u8, McpError> {
+    let s = s.trim_start_matches("0x").trim_start_matches("0X");
+    u8::from_str_radix(s, 16)
+        .map_err(|e| McpError::invalid_params(format!("bad hex byte '{s}': {e}"), None))
 }
 
 fn parse_hex_bytes(s: &str) -> Result<Vec<u8>, McpError> {
@@ -443,6 +485,64 @@ impl CanServer {
     }
 
     #[tool(
+        description = "ISO 15765-2 (ISO-TP) request/response in one call. Sends a payload of any length up to 4095 bytes — the server segments into Single Frame or First Frame + Consecutive Frames automatically, handles Flow Control in both directions, and returns the reassembled response payload. Use this for UDS, KWP2000, and OBD-II reads larger than 7 bytes (e.g. VIN reads). Classic CAN only in v0.2; CAN-FD ISO-TP on the roadmap."
+    )]
+    async fn isotp_request(
+        &self,
+        Parameters(args): Parameters<IsoTpRequestArgs>,
+    ) -> Result<CallToolResult, McpError> {
+        self.config.check_iface(&args.iface)?;
+        self.config.check_writable()?;
+
+        let tx_id = parse_hex_id(&args.tx_id, args.extended)?;
+        let rx_id = parse_hex_id(&args.rx_id, args.extended)?;
+        let payload = parse_hex_bytes(&args.payload)?;
+        let padding = parse_single_hex_byte(&args.padding)?;
+
+        let started = Instant::now();
+        let result: Result<Vec<u8>, McpError> = tokio::task::spawn_blocking(move || {
+            let opts = OpenOpts {
+                recv_timeout: Some(Duration::from_millis(50)),
+                ..OpenOpts::default()
+            };
+            let sock = Socket::open(&args.iface, &opts)
+                .map_err(|e| McpError::internal_error(format!("open {}: {e}", args.iface), None))?;
+            let isotp_opts = isotp::Options {
+                padding,
+                block_size: args.block_size,
+                st_min_ms: args.st_min_ms,
+                timeout: Duration::from_millis(args.timeout_ms),
+                ..isotp::Options::default()
+            };
+            isotp::request(&sock, tx_id, rx_id, &payload, &isotp_opts)
+                .map_err(|e| McpError::internal_error(format!("isotp: {e}"), None))
+        })
+        .await
+        .map_err(|e| McpError::internal_error(format!("join: {e}"), None))?;
+
+        let response = result?;
+        let response_hex: String = response.iter().map(|b| format!("{b:02X}")).collect();
+        let response_ascii: String = response
+            .iter()
+            .map(|&b| {
+                if (0x20..=0x7E).contains(&b) {
+                    b as char
+                } else {
+                    '.'
+                }
+            })
+            .collect();
+        Ok(ok_json(json!({
+            "response": {
+                "hex": response_hex,
+                "ascii": response_ascii,
+                "len": response.len(),
+            },
+            "duration_ms": started.elapsed().as_millis() as u64,
+        })))
+    }
+
+    #[tool(
         description = "Send a frame and capture replies in one call. The capture window starts immediately after the send. Useful for request/response patterns (UDS, OBD-II) without orchestrating two tool calls."
     )]
     async fn send_and_capture(
@@ -523,8 +623,10 @@ impl ServerHandler for CanServer {
             instructions: Some(
                 "Linux SocketCAN access for AI agents. Use list_interfaces to discover \
                  available buses, capture to observe traffic, send_frame to transmit, \
-                 and send_and_capture for request/response patterns. All write operations \
-                 are gated by SOCKETCAN_MCP_INTERFACES (allowlist) and SOCKETCAN_MCP_READONLY."
+                 send_and_capture for raw single-frame request/response, and \
+                 isotp_request for ISO 15765-2 segmented transport (UDS, KWP2000, \
+                 OBD-II reads larger than 7 bytes). All write operations are gated \
+                 by SOCKETCAN_MCP_INTERFACES (allowlist) and SOCKETCAN_MCP_READONLY."
                     .into(),
             ),
         }

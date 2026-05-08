@@ -6,9 +6,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Cargo workspace hosting two crates that share a common SocketCAN core, both MIT-licensed and meant to be published to crates.io:
 
-- **`mcanbus`** — high-performance SocketCAN bindings for Linux. Pure libc, no async runtime. CAN 2.0 + CAN-FD, batched `recvmmsg`/`sendmmsg` I/O, netlink helpers (`set_up`/`set_down`/`state`/`cycle`), optional multi-consumer fan-out reader. Extracted from the production code of [mcandump](https://github.com/mickeyl/mcandump) and [mcangen](https://github.com/mickeyl/mcangen).
+- **`mcanbus`** — high-performance SocketCAN bindings for Linux. Pure libc, no async runtime. CAN 2.0 + CAN-FD, batched `recvmmsg`/`sendmmsg` I/O, netlink helpers (`set_up`/`set_down`/`state`/`cycle`), ISO 15765-2 (ISO-TP) request/response, optional multi-consumer fan-out reader. Extracted from the production code of [mcandump](https://github.com/mickeyl/mcandump) and [mcangen](https://github.com/mickeyl/mcangen).
 
-- **`socketcan-mcp`** — Model Context Protocol server (rmcp 0.8) exposing SocketCAN to AI agents over stdio. Built on `mcanbus`. Tools: `list_interfaces`, `iface_state`, `capture`, `send_frame`, `send_and_capture`. Sandbox via `SOCKETCAN_MCP_INTERFACES` allowlist + `SOCKETCAN_MCP_READONLY=1`.
+- **`socketcan-mcp`** — Model Context Protocol server (rmcp 0.8) exposing SocketCAN to AI agents over stdio. Built on `mcanbus`. Tools: `list_interfaces`, `iface_state`, `capture`, `send_frame`, `send_and_capture`, `isotp_request`. Sandbox via `SOCKETCAN_MCP_INTERFACES` allowlist + `SOCKETCAN_MCP_READONLY=1`.
 
 Pinned to Rust 1.94.1 via `rust-toolchain.toml`.
 
@@ -69,6 +69,7 @@ mcanbus/                         workspace root
 │   │   ├── frame.rs             CanId, Frame, FdFlags, WireFrame, decode_wire
 │   │   ├── socket.rs            Socket, OpenOpts, CanFilter, Timestamping
 │   │   ├── iface.rs             Interface, CanState, list_can_interfaces, netlink
+│   │   ├── isotp.rs             ISO 15765-2 request() with automatic SF/FF/CF + Flow Control
 │   │   └── reader.rs            Reader, Subscriber (feature `reader`, default on)
 │   └── tests/integration_vcan.rs  env-gated live tests
 └── socketcan-mcp/               binary crate (MCP server)
@@ -92,6 +93,14 @@ The socket is `Send + Sync`. `try_clone()` does `dup`. `AsRawFd`/`IntoRawFd`/`Fr
 Pure netlink for state/up/down/cycle. `list_can_interfaces()` walks `/sys/class/net` and matches `type == 280` (ARPHRD_CAN), so it returns both real CAN devices and `vcan` shims. `bitrate()` shells out to `ip -details -json` rather than reproducing the nested `IFLA_LINKINFO`/`IFLA_INFO_DATA`/`IFLA_CAN_BITTIMING` parsing — the JSON parser is hand-rolled with a single `find("\"bitrate\":")` to avoid pulling in serde for what would be one read-mostly call.
 
 `set_up`/`set_down`/`cycle` build raw netlink `RTM_NEWLINK` requests and parse the kernel's `NLMSG_ERROR` ack. `cycle` is the gs_usb-class recipe for recovering from BUS-OFF (down, sleep 150 ms, up).
+
+### `mcanbus::isotp`
+
+Synchronous ISO 15765-2 request/response: `request(socket, tx_id, rx_id, payload, opts) -> io::Result<Vec<u8>>`. Encodes Single Frame for ≤ 7 bytes, otherwise First Frame + Consecutive Frames; receives Flow Control from the ECU and respects its BS=0 / STmin (BS > 0 not yet implemented). On the response side, sends our own Flow Control after a First Frame and reassembles Consecutive Frames into a `Vec<u8>`. Frames whose ID doesn't match `rx_id` are silently dropped, so the function works on a socket with a broad or no kernel-level filter.
+
+Padding default `0xCC` (Scania-typical). Total timeout default 1 s. Errors map cleanly: `TimedOut` for missed deadlines or excessive Wait flow controls, `InvalidData` for malformed PCI / sequence mismatches, `Unsupported` for the BS > 0 case, `Other` for ECU Overflow.
+
+Validated against a real Scania S8 truck: a single `request` reads the full 17-character VIN in ~1 ms (vs. four manual frames worth of orchestration without it).
 
 ### `mcanbus::reader`
 
