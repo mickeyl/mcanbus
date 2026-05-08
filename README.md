@@ -35,6 +35,8 @@ Both crates are MIT-licensed and meant to be lifted into other projects. They ar
 
 That same interaction took four MCP tool calls before `isotp_request` existed (one capture, one Single Frame, one Flow Control, one to read the Consecutive Frames). The library now handles segmentation and Flow Control; the agent handles the meaning.
 
+For contrast, the shell-driven version is `isotpsend` and `isotprecv` running in two background processes, with the agent parsing line-by-line text output and racing stdout buffering for timing — every CAN frame becomes a string, every reply becomes a regex, every multi-frame transfer becomes process orchestration. Most of the agent's context window ends up on plumbing instead of on the diagnostic question. The MCP path is a single typed call returning a typed result.
+
 See [`socketcan-mcp/`](socketcan-mcp/) for the full tool list and a Claude Desktop / Claude Code config snippet.
 
 ## Building
