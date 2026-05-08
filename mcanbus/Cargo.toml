@@ -1,0 +1,40 @@
+[package]
+name = "mcanbus"
+description = "High-performance, low-overhead SocketCAN bindings for Linux. Pure libc, no async runtime, optional fan-out reader for zero-loss multi-consumer pipelines."
+version = { workspace = true }
+edition = { workspace = true }
+rust-version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+readme = "README.md"
+keywords = ["can", "canbus", "socketcan", "canfd", "linux"]
+categories = ["network-programming", "os::linux-apis", "hardware-support"]
+
+[dependencies]
+libc = { workspace = true }
+crossbeam-channel = { version = "0.5", optional = true }
+
+[features]
+default = ["reader"]
+# Built-in multi-consumer fan-out reader (pulls in crossbeam-channel).
+reader = ["dep:crossbeam-channel"]
+
+[dev-dependencies]
+libc = { workspace = true }
+
+[[example]]
+name = "candump"
+path = "../examples/candump.rs"
+
+[[example]]
+name = "cangen"
+path = "../examples/cangen.rs"
+
+[[example]]
+name = "list_interfaces"
+path = "../examples/list_interfaces.rs"
+
+[[example]]
+name = "multireader"
+path = "../examples/multireader.rs"
