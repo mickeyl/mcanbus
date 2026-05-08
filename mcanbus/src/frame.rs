@@ -143,7 +143,10 @@ impl FrameKind {
     pub const fn fd_flags(self) -> FdFlags {
         match self {
             Self::Fd(f) => f,
-            Self::Classic => FdFlags { brs: false, esi: false },
+            Self::Classic => FdFlags {
+                brs: false,
+                esi: false,
+            },
         }
     }
 }
@@ -396,7 +399,9 @@ pub fn decode_wire(buf: &[u8], timestamp_ns: Option<u64>) -> Option<DecodedFrame
     if is_err {
         // Error frame: payload is fixed 8-byte struct can_frame.
         let mut data = [0u8; 8];
-        let n = (payload_len as usize).min(8).min(buf.len().saturating_sub(8));
+        let n = (payload_len as usize)
+            .min(8)
+            .min(buf.len().saturating_sub(8));
         data[..n].copy_from_slice(&buf[8..8 + n]);
         return Some(DecodedFrame::Error {
             class: can_id & CAN_ERR_MASK,
@@ -478,9 +483,18 @@ mod tests {
 
     #[test]
     fn fd_flags_round_trip() {
-        let f = FdFlags { brs: true, esi: false };
+        let f = FdFlags {
+            brs: true,
+            esi: false,
+        };
         assert_eq!(f.to_wire(), CANFD_BRS);
-        assert_eq!(FdFlags::from_wire(CANFD_BRS | CANFD_ESI), FdFlags { brs: true, esi: true });
+        assert_eq!(
+            FdFlags::from_wire(CANFD_BRS | CANFD_ESI),
+            FdFlags {
+                brs: true,
+                esi: true
+            }
+        );
     }
 
     #[test]
@@ -502,15 +516,13 @@ mod tests {
 
     #[test]
     fn classic_round_trip_through_wire() {
-        let original = Frame::new_classic(
-            CanId::standard(0x123),
-            &[0xDE, 0xAD, 0xBE, 0xEF],
-        )
-        .unwrap();
+        let original =
+            Frame::new_classic(CanId::standard(0x123), &[0xDE, 0xAD, 0xBE, 0xEF]).unwrap();
         let wire = WireFrame::from_frame(&original);
         // Reinterpret the WireFrame as a 16-byte classic frame buffer.
-        let bytes: &[u8] =
-            unsafe { core::slice::from_raw_parts((&wire as *const WireFrame) as *const u8, CAN_FRAME_SIZE) };
+        let bytes: &[u8] = unsafe {
+            core::slice::from_raw_parts((&wire as *const WireFrame) as *const u8, CAN_FRAME_SIZE)
+        };
         let decoded = decode_wire(bytes, None).unwrap();
         match decoded {
             DecodedFrame::Data(f) => {
@@ -536,17 +548,27 @@ mod tests {
         let original = Frame::new_fd(
             CanId::extended(0x1FFF_FFFF),
             &payload,
-            FdFlags { brs: true, esi: true },
+            FdFlags {
+                brs: true,
+                esi: true,
+            },
         )
         .unwrap();
         let wire = WireFrame::from_frame(&original);
-        let bytes: &[u8] =
-            unsafe { core::slice::from_raw_parts((&wire as *const WireFrame) as *const u8, CANFD_FRAME_SIZE) };
+        let bytes: &[u8] = unsafe {
+            core::slice::from_raw_parts((&wire as *const WireFrame) as *const u8, CANFD_FRAME_SIZE)
+        };
         let decoded = decode_wire(bytes, Some(123_456_789)).unwrap();
         match decoded {
             DecodedFrame::Data(f) => {
                 assert_eq!(f.id, original.id);
-                assert!(matches!(f.kind, FrameKind::Fd(FdFlags { brs: true, esi: true })));
+                assert!(matches!(
+                    f.kind,
+                    FrameKind::Fd(FdFlags {
+                        brs: true,
+                        esi: true
+                    })
+                ));
                 assert_eq!(f.data(), &payload[..]);
                 assert_eq!(f.timestamp_ns, Some(123_456_789));
             }
@@ -597,7 +619,10 @@ mod tests {
         let f = Frame::new_fd(
             CanId::standard(0x123),
             &[0xDE, 0xAD],
-            FdFlags { brs: true, esi: false },
+            FdFlags {
+                brs: true,
+                esi: false,
+            },
         )
         .unwrap();
         assert_eq!(format!("{f}"), "123##1DEAD");

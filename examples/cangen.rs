@@ -68,8 +68,18 @@ fn parse_args() -> Args {
     let mut data = vec![0xDEu8, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE, 0xBA, 0xBE];
     while let Some(arg) = it.next() {
         match arg.as_str() {
-            "--rate" => rate = it.next().and_then(|s| s.parse().ok()).unwrap_or_else(|| usage()),
-            "--batch" => batch = it.next().and_then(|s| s.parse().ok()).unwrap_or_else(|| usage()),
+            "--rate" => {
+                rate = it
+                    .next()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or_else(|| usage())
+            }
+            "--batch" => {
+                batch = it
+                    .next()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or_else(|| usage())
+            }
             "--id" => {
                 let s = it.next().unwrap_or_else(|| usage());
                 let s = s.trim_start_matches("0x");

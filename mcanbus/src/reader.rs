@@ -44,8 +44,8 @@
 //! latency is bounded by the socket's `recv_timeout` (default 500 ms): the
 //! thread won't see the stop flag until its current `recvmmsg` returns.
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;

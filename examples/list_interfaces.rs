@@ -11,7 +11,10 @@ fn main() -> std::io::Result<()> {
     }
     println!("{:<12} {:<6} {:<14} bitrate", "name", "up", "state");
     for iface in &ifaces {
-        let up = iface.is_up()?.map(|b| if b { "yes" } else { "no" }).unwrap_or("?");
+        let up = iface
+            .is_up()?
+            .map(|b| if b { "yes" } else { "no" })
+            .unwrap_or("?");
         let state = iface
             .state()
             .ok()

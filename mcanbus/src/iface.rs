@@ -69,8 +69,9 @@ impl Interface {
 
     /// Look up the kernel ifindex.
     pub fn index(&self) -> io::Result<u32> {
-        let cstr = CString::new(self.name.as_str())
-            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "interface name has nul byte"))?;
+        let cstr = CString::new(self.name.as_str()).map_err(|_| {
+            io::Error::new(io::ErrorKind::InvalidInput, "interface name has nul byte")
+        })?;
         // SAFETY: passing a valid NUL-terminated C string.
         let idx = unsafe { libc::if_nametoindex(cstr.as_ptr()) };
         if idx == 0 {

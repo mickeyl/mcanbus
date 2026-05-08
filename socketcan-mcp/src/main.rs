@@ -52,7 +52,10 @@ impl Config {
                 .as_str(),
             "1" | "true" | "yes" | "on"
         );
-        Self { allowlist, readonly }
+        Self {
+            allowlist,
+            readonly,
+        }
     }
 
     fn check_iface(&self, iface: &str) -> Result<(), McpError> {
@@ -209,7 +212,11 @@ impl FrameJson {
             mcanbus::FrameKind::Classic => (false, false, false),
             mcanbus::FrameKind::Fd(flags) => (true, flags.brs, flags.esi),
         };
-        let data_hex = f.data().iter().map(|b| format!("{b:02X}")).collect::<String>();
+        let data_hex = f
+            .data()
+            .iter()
+            .map(|b| format!("{b:02X}"))
+            .collect::<String>();
         Self {
             id: id_str,
             extended,
@@ -463,9 +470,8 @@ impl CanServer {
                 .map_err(|e| McpError::internal_error(format!("open rx {rx_iface}: {e}"), None))?;
 
             let tx = if rx_iface == args.iface {
-                rx.try_clone().map_err(|e| {
-                    McpError::internal_error(format!("clone tx: {e}"), None)
-                })?
+                rx.try_clone()
+                    .map_err(|e| McpError::internal_error(format!("clone tx: {e}"), None))?
             } else {
                 Socket::open(&args.iface, &OpenOpts::default()).map_err(|e| {
                     McpError::internal_error(format!("open tx {}: {e}", args.iface), None)
@@ -531,8 +537,7 @@ impl ServerHandler for CanServer {
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "info".into()),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
         )
         .with_writer(std::io::stderr)
         .with_ansi(false)

@@ -103,11 +103,8 @@ fn classic_round_trip() {
     let id = CanId::standard(ID_CLASSIC_RT);
 
     let tx = Socket::open(&tx_name, &tx_opts()).expect("open tx");
-    let rx = Socket::open(
-        &rx_name,
-        &opts_with(filter_only_sff(ID_CLASSIC_RT), 500),
-    )
-    .expect("open rx");
+    let rx =
+        Socket::open(&rx_name, &opts_with(filter_only_sff(ID_CLASSIC_RT), 500)).expect("open rx");
     drain(&rx, Duration::from_millis(50));
 
     let payload = [0xDE, 0xAD, 0xBE, 0xEF];
@@ -162,7 +159,15 @@ fn fd_round_trip() {
     }
 
     let payload: Vec<u8> = (0..32).collect();
-    let frame = Frame::new_fd(id, &payload, FdFlags { brs: true, esi: false }).unwrap();
+    let frame = Frame::new_fd(
+        id,
+        &payload,
+        FdFlags {
+            brs: true,
+            esi: false,
+        },
+    )
+    .unwrap();
     match tx.send(&frame) {
         Ok(()) => {}
         Err(e) if e.raw_os_error() == Some(libc::EINVAL) => {
@@ -247,8 +252,7 @@ fn try_clone_works() {
     drain(&s1, Duration::from_millis(50));
     let s2 = s1.try_clone().expect("dup");
 
-    let frame =
-        Frame::new_classic(CanId::standard(ID_TRY_CLONE), &[1, 2, 3]).unwrap();
+    let frame = Frame::new_classic(CanId::standard(ID_TRY_CLONE), &[1, 2, 3]).unwrap();
     s1.send(&frame).expect("send via s1");
     let _ = s2.recv().expect("recv via s2 ok");
 }
